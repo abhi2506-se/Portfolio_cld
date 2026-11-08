@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // IMPORTANT: must be identical to the Worker name configured in the Cloudflare dashboard
+  // (Workers & Pages -> your project -> Settings), otherwise the deploy fails with a name mismatch.
+  "name": "portfolio",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      // Self-reference binding required by OpenNext (must match "name" above)
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "portfolio"
+    }
+  ],
+  "observability": { "enabled": true }
+
+  // Runtime variables / secrets are NOT stored in this file.
+  //  - Non-secret values: Cloudflare dashboard -> Settings -> Variables and Secrets (type "Text")
+  //  - Secrets: dashboard (type "Secret") or `npx wrangler secret put <NAME>`
+  //  - Local preview only: copy .dev.vars.example to .dev.vars (git-ignored)
+}

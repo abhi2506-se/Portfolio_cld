@@ -1,0 +1,189 @@
+// PROPOSAL — introspect-only. Never run `prisma migrate dev/reset` against Neon.
+// Tables are created by visitor-system.sql; this file only gives typed queries.
+// Existing tables (live_chats, visitor_sessions, ...) are deliberately NOT modelled.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model VisitorAccessRequest {
+  id             String    @id
+  fullName       String    @map("full_name")
+  email          String
+  mobile         String
+  company        String
+  designation    String
+  purpose        String
+  linkedinUrl    String?   @map("linkedin_url")
+  websiteUrl     String?   @map("website_url")
+  status         String    @default("pending")
+  reviewedAt     DateTime? @map("reviewed_at") @db.Timestamptz
+  reviewedBy     String?   @map("reviewed_by")
+  rejectReason   String?   @map("reject_reason")
+  ipAddress      String?   @map("ip_address")
+  ipAnonymizedAt DateTime? @map("ip_anonymized_at") @db.Timestamptz
+  userAgent      String?   @map("user_agent")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+
+  visitor   Visitor?
+  auditLogs VisitorAuditLog[]
+
+  @@index([status, createdAt(sort: Desc)], map: "idx_var_status_created")
+  @@map("visitor_access_requests")
+}
+
+model Visitor {
+  id                   String    @id
+  visitorCode          String    @unique @map("visitor_code")
+  requestId            String?   @unique @map("request_id")
+  fullName             String    @map("full_name")
+  email                String
+  mobile               String
+  company              String
+  designation          String
+  purpose              String
+  linkedinUrl          String?   @map("linkedin_url")
+  websiteUrl           String?   @map("website_url")
+  passwordHash         String?   @map("password_hash")
+  status               String    @default("pending_activation")
+  expiresAt            DateTime  @map("expires_at") @db.Timestamptz
+  activatedAt          DateTime? @map("activated_at") @db.Timestamptz
+  disabledAt           DateTime? @map("disabled_at") @db.Timestamptz
+  disabledReason       String?   @map("disabled_reason")
+  lastLoginAt          DateTime? @map("last_login_at") @db.Timestamptz
+  totalOnlineSeconds   BigInt    @default(0) @map("total_online_seconds")
+  failedLoginCount     Int       @default(0) @map("failed_login_count")
+  lockedUntil          DateTime? @map("locked_until") @db.Timestamptz
+  expiryReminderSentAt DateTime? @map("expiry_reminder_sent_at") @db.Timestamptz
+  createdBy            String?   @map("created_by")
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+
+  request   VisitorAccessRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  sessions  VisitorSession[]
+  tokens    VisitorAuthToken[]
+  auditLogs VisitorAuditLog[]
+  emailLogs VisitorEmailLog[]
+  demoChats DemoChat[]
+  demoMsgs  DemoChatMessage[]
+
+  @@index([status, expiresAt], map: "idx_visitors_status_exp")
+  @@map("visitors")
+}
+
+model VisitorSession {
+  id             String    @id
+  visitorId      String    @map("visitor_id")
+  tokenHash      String    @unique @map("token_hash")
+  loginAt        DateTime  @default(now()) @map("login_at") @db.Timestamptz
+  lastActiveAt   DateTime  @default(now()) @map("last_active_at") @db.Timestamptz
+  logoutAt       DateTime? @map("logout_at") @db.Timestamptz
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz
+  revokedReason  String?   @map("revoked_reason")
+  onlineSeconds  Int       @default(0) @map("online_seconds")
+  deviceCategory String?   @map("device_category")
+  browser        String?
+  os             String?
+  ipAddress      String?   @map("ip_address")
+  ipAnonymizedAt DateTime? @map("ip_anonymized_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  visitor Visitor @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+
+  @@index([visitorId, loginAt(sort: Desc)], map: "idx_vsa_visitor")
+  @@map("visitor_sessions_auth")
+}
+
+model VisitorAuthToken {
+  id        String    @id
+  visitorId String    @map("visitor_id")
+  type      String
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  createdBy String?   @map("created_by")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  visitor Visitor @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+
+  @@index([visitorId, type], map: "idx_vat_visitor")
+  @@map("visitor_auth_tokens")
+}
+
+model VisitorAuditLog {
+  id             String    @id
+  visitorId      String?   @map("visitor_id")
+  requestId      String?   @map("request_id")
+  eventType      String    @map("event_type")
+  actorType      String    @map("actor_type")
+  actorId        String?   @map("actor_id")
+  ipAddress      String?   @map("ip_address")
+  ipAnonymizedAt DateTime? @map("ip_anonymized_at") @db.Timestamptz
+  userAgent      String?   @map("user_agent")
+  metadata       Json      @default("{}")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  visitor Visitor?               @relation(fields: [visitorId], references: [id], onDelete: SetNull)
+  request VisitorAccessRequest?  @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+  @@index([visitorId, createdAt(sort: Desc)], map: "idx_val_visitor_created")
+  @@index([eventType, createdAt(sort: Desc)], map: "idx_val_event_created")
+  @@map("visitor_audit_logs")
+}
+
+model VisitorEmailLog {
+  id                String    @id
+  visitorId         String?   @map("visitor_id")
+  senderType        String    @map("sender_type")
+  fromAddress       String    @map("from_address")
+  toEmail           String    @map("to_email")
+  notificationType  String    @map("notification_type")
+  status            String    @default("queued")
+  providerMessageId String?   @map("provider_message_id")
+  errorMessage      String?   @map("error_message")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  sentAt            DateTime? @map("sent_at") @db.Timestamptz
+
+  visitor Visitor? @relation(fields: [visitorId], references: [id], onDelete: SetNull)
+
+  @@index([visitorId, createdAt(sort: Desc)], map: "idx_vel_visitor")
+  @@map("visitor_email_logs")
+}
+
+model DemoChat {
+  id        String   @id
+  visitorId String   @map("visitor_id")
+  title     String   @default("Demo Chat")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  visitor  Visitor           @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  messages DemoChatMessage[]
+
+  @@index([visitorId, updatedAt(sort: Desc)], map: "idx_dc_visitor")
+  @@map("demo_chats")
+}
+
+model DemoChatMessage {
+  id        String   @id
+  chatId    String   @map("chat_id")
+  visitorId String   @map("visitor_id")
+  role      String
+  content   String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  chat    DemoChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  visitor Visitor  @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, createdAt], map: "idx_dcm_chat")
+  @@index([visitorId, createdAt(sort: Desc)], map: "idx_dcm_visitor")
+  @@map("demo_chat_messages")
+}
