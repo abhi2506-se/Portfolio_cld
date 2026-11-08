@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // IMPORTANT: must be identical to the Worker name configured in the Cloudflare dashboard
   // (Workers & Pages -> your project -> Settings), otherwise the deploy fails with a name mismatch.
-  "name": "portfolio",
+  "name": "portfolio-cld",
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-09-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
@@ -14,7 +14,7 @@
     {
       // Self-reference binding required by OpenNext (must match "name" above)
       "binding": "WORKER_SELF_REFERENCE",
-      "service": "portfolio"
+      "service": "portfolio-cld"
     }
   ],
   "observability": { "enabled": true }
